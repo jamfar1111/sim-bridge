@@ -1,0 +1,10 @@
+name = "sim-bridge-signal"
+main = "worker.js"
+compatibility_date = "2026-11-23"
+
+[durable_objects]
+bindings = [{ name = "SIGNAL_ROOM", class_name = "SignalRoom" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SignalRoom"]

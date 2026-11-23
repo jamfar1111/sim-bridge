@@ -1,0 +1,53 @@
+# Validates the iOS build on a macOS runner WITHOUT signing, and packages
+# the unsigned Runner.app as an IPA artifact. The owner installs it with
+# AltStore (free Apple ID signs it on their PC; signature lasts 7 days).
+# No Apple credentials or secrets are used anywhere in this file.
+# A signed (TestFlight) build would need a paid Apple Developer account.
+
+name: iOS build check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'flutter/**'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: flutter
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.50.1'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build iOS (unsigned, compile check only)
+        run: flutter build ios --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r sim-bridge-unsigned.ipa Payload
+          ls -la sim-bridge-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-bridge-unsigned-ipa
+          path: flutter/sim-bridge-unsigned.ipa

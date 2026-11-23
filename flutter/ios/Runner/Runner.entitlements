@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/dtds/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Paid Apple Developer account ONLY. Do not enable this file (CODE_SIGN_ENTITLEMENTS) for a free
+	     Apple ID build: these entitlements are not available on a free account and signing will fail.
+	     - com.apple.developer.pushkit.unrestricted-voip: VoIP push (PushKit) that wakes the app for an
+	       incoming call and shows the native call screen while the app is closed.
+	     - com.apple.developer.usernotifications.communication: Communication notifications (SMS/call
+	       notifications from the bridge, grouped per conversation).
+	     Without a paid account, far-apart calls can only ring while the app is open; the free path uses
+	     Bark push as a fallback (the user taps the alert, the app opens, and the still-ringing call is
+	     answered over the link). See NATIVE_CHANNELS.md. -->
+	<key>com.apple.developer.pushkit.unrestricted-voip</key>
+	<true/>
+	<key>com.apple.developer.usernotifications.communication</key>
+	<true/>
+</dict>
+</plist>
