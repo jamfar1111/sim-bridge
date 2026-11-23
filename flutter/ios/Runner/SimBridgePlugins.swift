@@ -45,7 +45,7 @@ final class BlePlugin: NSObject, FlutterPlugin {
         DispatchQueue.main.async { self.sink?(event) }
     }
 
-    private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "startAdvertising":
             // iOS is the central: there is nothing to advertise. The Dart side starts the link with `connect`.
@@ -111,74 +111,85 @@ final class CallKitPlugin: NSObject, FlutterPlugin {
         methods.setMethodCallHandler(instance.handle)
         let events = FlutterEventChannel(name: "com.simbridge/callkit/events", binaryMessenger: registrar.messenger())
         events.setStreamHandler(instance)
-        instance.manager.onAction = { action in
-            DispatchQueue.main.async { instance.sink?(action) }
+        // CallKitManager is @MainActor, so it is created and wired on the main actor. Registration runs on the
+        // main thread, so this hop runs before any Dart call can arrive.
+        Task { @MainActor in
+            instance.manager = CallKitManager()
+            instance.manager?.onAction = { action in
+                DispatchQueue.main.async { instance.sink?(action) }
+            }
         }
     }
 
-    private let manager = CallKitManager()
+    private var manager: CallKitManager?
     private var sink: FlutterEventSink?
 
     private func args(_ call: FlutterMethodCall) -> [String: Any] {
         call.arguments as? [String: Any] ?? [:]
     }
 
-    private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Not private: a method that satisfies the FlutterPlugin requirement must be at least as
+    // accessible as the enclosing type.
+    func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         Task { @MainActor in
+            guard let manager = self.manager else {
+                result(FlutterError(code: "not_ready", message: "CallKit not ready", details: nil))
+                return
+            }
             switch call.method {
             case "reportCall":
                 if let map = self.args(call)["call"] as? [String: Any],
                    let info = SimCallInfo.from(map) {
-                    self.manager.handle(info)
+                    manager.handle(info)
                 }
                 result(nil)
             case "reconcile":
                 let list = (self.args(call)["calls"] as? [[String: Any]] ?? []).compactMap(SimCallInfo.from)
-                self.manager.reconcile(with: list)
+                manager.reconcile(with: list)
                 result(nil)
             case "linkLost":
-                self.manager.linkLost()
+                manager.linkLost()
                 result(nil)
             case "dialAccepted":
-                self.manager.dialAccepted()
+                manager.dialAccepted()
                 result(nil)
             case "dialFailed":
-                self.manager.dialFailed(self.args(call)["err"] as? String ?? "failed")
+                manager.dialFailed(self.args(call)["err"] as? String ?? "failed")
                 result(nil)
             case "startOutgoing":
                 let a = self.args(call)
-                self.manager.startOutgoing(number: a["num"] as? String ?? "",
+                manager.startOutgoing(number: a["num"] as? String ?? "",
                                            sub: (a["sub"] as? NSNumber)?.intValue)
                 result(nil)
             case "answer":
-                if let cid = self.args(call)["cid"] as? String { self.manager.answer(cid: cid) }
+                if let cid = self.args(call)["cid"] as? String { manager.answer(cid: cid) }
                 result(nil)
             case "end":
-                if let cid = self.args(call)["cid"] as? String { self.manager.end(cid: cid) }
+                if let cid = self.args(call)["cid"] as? String { manager.end(cid: cid) }
                 result(nil)
             case "setMuted":
                 let a = self.args(call)
-                if let cid = a["cid"] as? String, let uuid = self.manager.uuid(for: cid) {
-                    self.manager.setMuted(uuid, a["on"] as? Bool ?? false)
+                if let cid = a["cid"] as? String, let uuid = manager.uuid(for: cid) {
+                    manager.setMuted(uuid, a["on"] as? Bool ?? false)
                 }
                 result(nil)
             case "setHeld":
                 let a = self.args(call)
-                if let cid = a["cid"] as? String, let uuid = self.manager.uuid(for: cid) {
-                    self.manager.setHeld(uuid, a["on"] as? Bool ?? false)
+                if let cid = a["cid"] as? String, let uuid = manager.uuid(for: cid) {
+                    manager.setHeld(uuid, a["on"] as? Bool ?? false)
                 }
                 result(nil)
             case "dtmf":
                 let a = self.args(call)
-                if let cid = a["cid"] as? String, let uuid = self.manager.uuid(for: cid) {
-                    self.manager.dtmf(uuid, a["d"] as? String ?? "")
+                if let cid = a["cid"] as? String, let uuid = manager.uuid(for: cid) {
+                    manager.dtmf(uuid, a["d"] as? String ?? "")
                 }
                 result(nil)
             case "take":
-                if let cid = self.args(call)["cid"] as? String { self.manager.take(cid) }
+                if let cid = self.args(call)["cid"] as? String { manager.take(cid) }
                 result(nil)
             case "setSpeaker":
-                self.manager.setSpeaker(self.args(call)["on"] as? Bool ?? false)
+                manager.setSpeaker(self.args(call)["on"] as? Bool ?? false)
                 result(nil)
             default:
                 result(FlutterMethodNotImplemented)
@@ -228,7 +239,9 @@ final class AudioPlugin: NSObject, FlutterPlugin {
         call.arguments as? [String: Any] ?? [:]
     }
 
-    private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Not private: a method that satisfies the FlutterPlugin requirement must be at least as
+    // accessible as the enclosing type.
+    func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "audioStart":
             let a = args(call)

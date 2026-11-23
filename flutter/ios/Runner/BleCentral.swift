@@ -316,7 +316,7 @@ extension BleCentral: CBCentralManagerDelegate {
         guard p == peripheral || peripheral == nil else { return }
         log("disconnected: \(error.map { "\($0)" } ?? "-")")
         disconnectPeripheral(reason: "peripheral disconnected")
-        if let id = p.identifier.uuidString { onDisconnected?(id) }
+        onDisconnected?(p.identifier.uuidString)
         reconnectSoon()
     }
 }
